@@ -2,14 +2,23 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"net/http"
+	"time"
+
+	// "io"
 	"log"
 	"math/rand/v2"
-	"net/http"
-	"os"
-	"os/exec"
+
+	// "net/http"
+	// "os"
+	// "os/exec"
+	// "github.com/faiface/beep/mp3"
+	// "github.com/hajimehoshi/go-mp3"
 	"sort"
 	"strings"
+
+	"github.com/ebitengine/oto/v3"
+	"github.com/hajimehoshi/go-mp3"
 
 	"github.com/rivo/tview"
 	"google.golang.org/api/option"
@@ -212,31 +221,59 @@ func showResults(correctCount int, testWords []Word, app *tview.Application) {
 	app.SetRoot(modal, true)
 }
 func playAudio(fileURL string) {
-	resp, err := http.Get(fileURL)
+	// cmd := exec.Command("mpg123", fileURL)
+	// if err := cmd.Run(); err != nil {
+	// 	return
+	// }
+	//-----------------------------
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", fileURL, nil)
 	if err != nil {
-		log.Printf("Error fetching audio file: %v", err)
+		return
+	}
+
+	// Set a browser-like User-Agent header
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	// Perform the request
+	resp, err := client.Do(req)
+	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
-
-	tempFile, err := os.CreateTemp("", "audio-*.mp3")
 	if err != nil {
-		log.Printf("Error creating temporary file: %v", err)
-		return
+		log.Fatal("Error fetching MP3:", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer resp.Body.Close()
 
-	_, err = io.Copy(tempFile, resp.Body)
+	decodedMp3, err := mp3.NewDecoder(resp.Body)
+
 	if err != nil {
-		log.Printf("Error saving audio file: %v", err)
-		return
+		log.Fatal("Error decoding MP3:", err)
 	}
+	op := &oto.NewContextOptions{}
+	op.SampleRate = 44100
+	op.ChannelCount = 2
+	op.Format = oto.FormatSignedInt16LE
+	// Remember that you should **not** create more than one context
+	otoCtx, readyChan, err := oto.NewContext(op)
+	if err != nil {
+		panic("oto.NewContext failed: " + err.Error())
+	}
+	<-readyChan
+	player := otoCtx.NewPlayer(decodedMp3)
 
-	tempFile.Close()
+	// Play starts playing the sound and returns without waiting for it (Play() is async).
+	player.Play()
 
-	cmd := exec.Command("mpg123", tempFile.Name())
-	if err := cmd.Run(); err != nil {
-		log.Printf("Error playing audio: %v", err)
+	// We can wait for the sound to finish playing using something like this
+	for player.IsPlaying() {
+		time.Sleep(time.Millisecond)
+	}
+	err = player.Close()
+	if err != nil {
+		panic("player.Close failed: " + err.Error())
 	}
 }
 func updateData(app *tview.Application, words []Word, service *sheets.Service, sheetId, rangeData string) {

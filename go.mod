@@ -3,6 +3,8 @@ module cmd/main.go
 go 1.24.2
 
 require (
+	github.com/ebitengine/oto/v3 v3.3.3
+	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/rivo/tview v0.0.0-20250501113434-0c592cd31026
 	google.golang.org/api v0.231.0
 )
@@ -11,6 +13,7 @@ require (
 	cloud.google.com/go/auth v0.16.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
+	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.7.1 // indirect
