@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
-	// "time"
 
 	"github.com/rivo/tview"
 	"google.golang.org/api/option"
@@ -30,16 +29,17 @@ var mainMenu *tview.List
 
 func main() {
 	fmt.Println("Welcome to the English Practice App!")
+	// Read data from the sheet
+	spreadsheetId := "1_xKMjnfCG3ADEH5nz5JOqvsFsdQ7UVPmc2ZDBtpvoc8"
+	rangeData := "vocabulary!A2:E"
 
 	// Initialize Sheets API client
+	// service, err := sheets.NewService(nil, option.WithAuthCredentials())
 	service, err := sheets.NewService(nil, option.WithCredentialsFile("credentials.json"))
 	if err != nil {
 		log.Fatalf("Unable to create Sheets client: %v", err)
 	}
 
-	// Read data from the sheet
-	spreadsheetId := "1_xKMjnfCG3ADEH5nz5JOqvsFsdQ7UVPmc2ZDBtpvoc8"
-	rangeData := "vocabulary!A2:E"
 	resp, err := service.Spreadsheets.Values.Get(spreadsheetId, rangeData).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve data from sheet: %v", err)
@@ -50,16 +50,24 @@ func main() {
 	words := parseSheetData(resp.Values)
 	fmt.Printf("Loaded %d words from the sheet.\n", len(words))
 
-	// Example: Decrease points daily
-	decreasePointsDaily(words)
-
 	// Initialize UI
 	app := tview.NewApplication()
 	mainMenu = tview.NewList()
 	mainMenu.SetBorder(true).SetTitle("Main Menu")
 	// mainMenu = tview.NewList().SetBorder(true).SetTitle("Options")
-	mainMenu.AddItem("Create Test by Lowest Points", "", 'a', func() {
+	mainMenu.AddItem("Create Test by Lowest Points", "", 'c', func() {
 		createTestByLowestPoints(words, app)
+	})
+	mainMenu.AddItem("Refresh Data", "", 'r', func() {
+		words = refreshData(app, service, spreadsheetId, rangeData)
+	})
+	//	Update data
+	mainMenu.AddItem("Update Data", "", 'u', func() {
+		updateData(app, words, service, spreadsheetId, rangeData)
+	})
+	//  Decrease points
+	mainMenu.AddItem("Decrease Points Daily", "", 'd', func() {
+		decreasePointsDaily(app, words)
 	})
 	mainMenu.AddItem("Quit", "", 'q', func() {
 		app.Stop()
@@ -92,17 +100,25 @@ func parseSheetData(data [][]interface{}) []Word {
 	}
 	return words
 }
-
-func decreasePointsDaily(words []Word) {
+func decreasePointsDaily(app *tview.Application, words []Word) {
 	for i := range words {
 		words[i].Point--
 		if words[i].Point < 0 {
 			words[i].Point = 0
 		}
 	}
-	fmt.Println("Points decreased for all words.")
-}
+	// Show screen
+	modal := tview.NewModal()
+	resultText := fmt.Sprintf("Decreased point for %d words!", len(words))
 
+	modal.SetText(resultText).
+		AddButtons([]string{"Back to Menu"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			app.SetRoot(mainMenu, true)
+		})
+
+	app.SetRoot(modal, true)
+}
 func createTestByLowestPoints(words []Word, app *tview.Application) {
 	form := tview.NewForm()
 	form.AddInputField("Number of words", "", 10, nil, nil)
@@ -128,7 +144,6 @@ func createTestByLowestPoints(words []Word, app *tview.Application) {
 
 	app.SetRoot(form, true)
 }
-
 func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 	if len(testWords) == 0 {
 		log.Println("No words available for the test.")
@@ -157,6 +172,7 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 		}
 
 		if strings.EqualFold(text, testWords[index].English) {
+			testWords[index].Point += 2
 			correctCount++
 			index++
 
@@ -183,7 +199,6 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 
 	app.SetRoot(form, true)
 }
-
 func showResults(correctCount int, testWords []Word, app *tview.Application) {
 	modal := tview.NewModal()
 	resultText := fmt.Sprintf("You got %d/%d correct!", correctCount, len(testWords))
@@ -223,4 +238,61 @@ func playAudio(fileURL string) {
 	if err := cmd.Run(); err != nil {
 		log.Printf("Error playing audio: %v", err)
 	}
+}
+func updateData(app *tview.Application, words []Word, service *sheets.Service, sheetId, rangeData string) {
+
+	// Update the sheet with the new data
+	var vr sheets.ValueRange
+	for _, word := range words {
+		vr.Values = append(vr.Values, []interface{}{
+			word.English,
+			word.Vietnamese,
+			word.MP3,
+			word.Tag,
+			word.Point,
+		})
+	}
+
+	_, err := service.Spreadsheets.Values.Update(sheetId, rangeData, &vr).ValueInputOption("RAW").Do()
+	if err != nil {
+		log.Fatalf("Unable to update data in sheet: %v", err)
+	}
+
+	// Show screen
+	modal := tview.NewModal()
+	resultText := fmt.Sprintf("Updated %d words!", len(words))
+
+	modal.SetText(resultText).
+		AddButtons([]string{"Back to Menu"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			app.SetRoot(mainMenu, true)
+		})
+
+	app.SetRoot(modal, true)
+
+}
+func refreshData(app *tview.Application, service *sheets.Service, sheetId, rangeData string) []Word {
+	// Read data from the sheet
+	resp, err := service.Spreadsheets.Values.Get(sheetId, rangeData).Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve data from sheet: %v", err)
+	}
+
+	// Parse the new data
+	words := []Word{}
+	words = parseSheetData(resp.Values)
+
+	// Show screen
+	modal := tview.NewModal()
+	resultText := fmt.Sprintf("Refreshed %d words!", len(words))
+
+	modal.SetText(resultText).
+		AddButtons([]string{"Back to Menu"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			app.SetRoot(mainMenu, true)
+		})
+
+	app.SetRoot(modal, true)
+
+	return words
 }
