@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"math/rand/v2"
-	"net/http"
-	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -212,29 +209,8 @@ func showResults(correctCount int, testWords []Word, app *tview.Application) {
 	app.SetRoot(modal, true)
 }
 func playAudio(fileURL string) {
-	resp, err := http.Get(fileURL)
-	if err != nil {
-		log.Printf("Error fetching audio file: %v", err)
-		return
-	}
-	defer resp.Body.Close()
 
-	tempFile, err := os.CreateTemp("", "audio-*.mp3")
-	if err != nil {
-		log.Printf("Error creating temporary file: %v", err)
-		return
-	}
-	defer os.Remove(tempFile.Name())
-
-	_, err = io.Copy(tempFile, resp.Body)
-	if err != nil {
-		log.Printf("Error saving audio file: %v", err)
-		return
-	}
-
-	tempFile.Close()
-
-	cmd := exec.Command("mpg123", tempFile.Name())
+	cmd := exec.Command("mpg123", fileURL)
 	if err := cmd.Run(); err != nil {
 		log.Printf("Error playing audio: %v", err)
 	}
