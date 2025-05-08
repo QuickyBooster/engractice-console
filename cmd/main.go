@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rivo/tview"
 	"google.golang.org/api/option"
@@ -156,7 +157,7 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 	input := tview.NewInputField().SetLabel("Your Answer: ")
 
 	if audioEnabled {
-		playAudio(testWords[index].MP3)
+		go playAudio(testWords[index].MP3)
 	}
 
 	// Keep track of whether we're done with the test
@@ -169,6 +170,7 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 		}
 
 		if strings.EqualFold(text, testWords[index].English) {
+			time.Sleep(1 * time.Second)
 			testWords[index].Point += 2
 			correctCount++
 			index++
@@ -176,9 +178,10 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 			if index < len(testWords) {
 				// Move to next word
 				vietnamese.SetText(testWords[index].Vietnamese)
+				// wait for 1 second before clearing the input field
 				input.SetText("")
 				if audioEnabled {
-					playAudio(testWords[index].MP3)
+					go playAudio(testWords[index].MP3)
 				}
 			} else {
 				// All words completed
@@ -190,6 +193,9 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 
 	form.AddFormItem(vietnamese)
 	form.AddFormItem(input)
+	form.AddButton("Play audio again", func() {
+		go playAudio(testWords[index].MP3)
+	})
 	form.AddButton("Quit", func() {
 		app.SetRoot(mainMenu, true)
 	})
