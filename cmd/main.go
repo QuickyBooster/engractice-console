@@ -154,6 +154,7 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 
 	form := tview.NewForm()
 	vietnamese := tview.NewTextView().SetText(testWords[index].Vietnamese).SetLabel("Vietnamese: ")
+	english := tview.NewTextView().SetText("").SetLabel("English: ")
 	input := tview.NewInputField().SetLabel("Your Answer: ")
 
 	if audioEnabled {
@@ -180,6 +181,7 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 				vietnamese.SetText(testWords[index].Vietnamese)
 				// wait for 1 second before clearing the input field
 				input.SetText("")
+				english.SetText("")
 				if audioEnabled {
 					go playAudio(testWords[index].MP3)
 				}
@@ -192,9 +194,16 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 	})
 
 	form.AddFormItem(vietnamese)
+	form.AddFormItem(english)
 	form.AddFormItem(input)
 	form.AddButton("Play audio again", func() {
 		go playAudio(testWords[index].MP3)
+	})
+	form.AddButton("Show Answer", func() {
+		english.SetText(testWords[index].English)
+	})
+	form.AddButton("Turn on/off audio", func() {
+		audioEnabled = !audioEnabled
 	})
 	form.AddButton("Quit", func() {
 		app.SetRoot(mainMenu, true)
