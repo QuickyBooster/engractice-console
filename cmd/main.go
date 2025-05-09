@@ -1,14 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"math/rand/v2"
-	"os/exec"
-	"runtime"
+	"net/http"
+	"os"
+	// "os/exec"
+	// "runtime"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ebitengine/oto/v3"
+	"github.com/hajimehoshi/go-mp3"
 
 	"github.com/rivo/tview"
 	"google.golang.org/api/option"
@@ -225,16 +232,77 @@ func showResults(correctCount int, testWords []Word, app *tview.Application) {
 	app.SetRoot(modal, true)
 }
 func playAudio(fileURL string) {
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command("powershell", "-c", "Start-Process", "-FilePath", fileURL)
-		if err := cmd.Run(); err != nil {
-			log.Printf("Error playing audio on Windows: %v", err)
-		}
-	} else {
-		cmd := exec.Command("mpg123", fileURL)
-		if err := cmd.Run(); err != nil {
-			log.Printf("Error playing audio on Linux: %v", err)
-		}
+	// get the mp3 file before playing it
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET", fileURL, nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+	res, _ := client.Do(req)
+	// var file *os.File
+
+	file,_ := os.Create("audio.mp3")
+	io.Copy(file, res.Body)
+	defer file.Close()
+	// fileBytes, err := readFileContents(file)
+	fileBytes, err := os.ReadFile("audio.mp3")
+	if err != nil {
+		panic("audio")
+	}
+
+	// Convert the pure bytes into a reader object that can be used with the mp3 decoder
+	fileBytesReader := bytes.NewReader(fileBytes)
+
+	// Decode file
+	decodedMp3, err := mp3.NewDecoder(fileBytesReader)
+	if err != nil {
+		panic("audio decoder")
+	}
+
+	// Prepare an Oto context (this will use your default audio device) that will
+	// play all our sounds. Its configuration can't be changed later.
+
+	op := &oto.NewContextOptions{}
+
+	// Usually 44100 or 48000. Other values might cause distortions in Oto
+	op.SampleRate = 44100
+
+	// Number of channels (aka locations) to play sounds from. Either 1 or 2.
+	// 1 is mono sound, and 2 is stereo (most speakers are stereo).
+	op.ChannelCount = 2
+
+	// Format of the source. go-mp3's format is signed 16bit integers.
+	op.Format = oto.FormatSignedInt16LE
+
+	// Remember that you should **not** create more than one context
+	otoCtx, readyChan, err := oto.NewContext(op)
+	if err != nil {
+		panic("oto.NewContext failed: ")
+	}
+	// It might take a bit for the hardware audio devices to be ready, so we wait on the channel.
+	<-readyChan
+
+	// Create a new 'player' that will handle our sound. Paused by default.
+	player := otoCtx.NewPlayer(decodedMp3)
+
+	// Play starts playing the sound and returns without waiting for it (Play() is async).
+	player.Play()
+
+	// We can wait for the sound to finish playing using something like this
+	for player.IsPlaying() {
+		time.Sleep(time.Millisecond)
+	}
+
+	// Now that the sound finished playing, we can restart from the beginning (or go to any location in the sound) using seek
+	// newPos, err := player.(io.Seeker).Seek(0, io.SeekStart)
+	// if err != nil{
+	//     panic("player.Seek failed: " + err.Error())
+	// }
+	// println("Player is now at position:", newPos)
+	// player.Play()
+
+	// If you don't want the player/sound anymore simply close
+	err = player.Close()
+	if err != nil {
+		panic("player.Close failed: " + err.Error())
 	}
 }
 func updateData(app *tview.Application, words []Word, service *sheets.Service, sheetId, rangeData string) {
@@ -293,4 +361,41 @@ func refreshData(app *tview.Application, service *sheets.Service, sheetId, range
 	app.SetRoot(modal, true)
 
 	return words
+}
+
+// from os :))
+func readFileContents(f *os.File) ([]byte, error) {
+	var size int
+	if info, err := f.Stat(); err == nil {
+		size64 := info.Size()
+		if int64(int(size64)) == size64 {
+			size = int(size64)
+		}
+	}
+	size++ // one byte for final read at EOF
+
+	// If a file claims a small size, read at least 512 bytes.
+	// In particular, files in Linux's /proc claim size 0 but
+	// then do not work right if read in small pieces,
+	// so an initial read of 1 byte would not work correctly.
+	if size < 512 {
+		size = 512
+	}
+
+	data := make([]byte, 0, size)
+	for {
+		n, err := f.Read(data[len(data):cap(data)])
+		data = data[:len(data)+n]
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return data, err
+		}
+
+		if len(data) >= cap(data) {
+			d := append(data[:cap(data)], 0)
+			data = d[:len(data)]
+		}
+	}
 }

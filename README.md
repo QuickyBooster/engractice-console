@@ -14,9 +14,15 @@ A terminal-based English learning application that helps users practice vocabula
 ## Prerequisites
 
 - Go 1.21 or later
-- mpg123 (for audio playback)
 - Google Sheets API credentials
 
+- For linux:
+   - package:
+      - mpg123 (for audio playback)
+      - gcc
+      - pkgconf
+   - enable:
+      - `CGO_ENABLED=1`
 ## Setup
 
 1. Clone the repository
