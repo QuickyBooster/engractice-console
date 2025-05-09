@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -224,10 +225,16 @@ func showResults(correctCount int, testWords []Word, app *tview.Application) {
 	app.SetRoot(modal, true)
 }
 func playAudio(fileURL string) {
-
-	cmd := exec.Command("mpg123", fileURL)
-	if err := cmd.Run(); err != nil {
-		log.Printf("Error playing audio: %v", err)
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("powershell", "-c", "Start-Process", "-FilePath", fileURL)
+		if err := cmd.Run(); err != nil {
+			log.Printf("Error playing audio on Windows: %v", err)
+		}
+	} else {
+		cmd := exec.Command("mpg123", fileURL)
+		if err := cmd.Run(); err != nil {
+			log.Printf("Error playing audio on Linux: %v", err)
+		}
 	}
 }
 func updateData(app *tview.Application, words []Word, service *sheets.Service, sheetId, rangeData string) {
