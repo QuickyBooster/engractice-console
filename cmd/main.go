@@ -134,7 +134,7 @@ func createTestByLowestPoints(words []Word, app *tview.Application) {
 		if numWords > len(words) {
 			numWords = len(words)
 		}
-		startTest(words[:numWords], app, true)
+		startTest(words[:numWords], app, false)
 	})
 	form.AddButton("Cancel", func() {
 		app.SetRoot(mainMenu, true)
