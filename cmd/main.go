@@ -171,6 +171,7 @@ func startTest(testWords []Word, app *tview.Application, audioEnabled bool) {
 		}
 
 		if strings.EqualFold(text, testWords[index].English) {
+			go playAudio(testWords[index].MP3)
 			time.Sleep(1 * time.Second)
 			testWords[index].Point += 2
 			correctCount++
